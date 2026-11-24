@@ -24,6 +24,10 @@ def main():
         raise SystemExit("entry text violates the 1-160 char gate")
     if "\n" in TEXT or "\r" in TEXT:
         raise SystemExit("entry text is not exactly one line")
+    # No invisible control characters: a stray C0 byte would survive the
+    # length check but garble the one-line joke for the grader.
+    if any(ord(c) < 0x20 for c in TEXT):
+        raise SystemExit("entry text contains a control character")
     out_dir = os.environ.get("OUTPUT_DIR", "/output")
     os.makedirs(out_dir, exist_ok=True)
     # Write atomically: a crash mid-write must never leave a truncated
@@ -41,6 +45,11 @@ def main():
     with open(final_path, encoding="utf-8") as f:
         if f.read() != TEXT:
             raise SystemExit("entry.txt read-back mismatch after atomic write")
+    # Byte-length guard: the file on disk must hold exactly the gated
+    # text's UTF-8 bytes — catches an encoding slip that a str read-back
+    # alone would miss (e.g. a stray BOM written by another tool).
+    if os.path.getsize(final_path) != len(TEXT.encode("utf-8")):
+        raise SystemExit("entry.txt byte-length mismatch after atomic write")
 
 
 if __name__ == "__main__":
